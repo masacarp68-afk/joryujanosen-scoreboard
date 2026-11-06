@@ -879,7 +879,17 @@ function showScoreboard() {
   const rowsEl = document.getElementById('sb-rows');
   rowsEl.innerHTML = '';
 
-  players.forEach((p, i) => {
+  // 順位の数字で並べる（空欄や数字以外は下へ。同順位は入力順のまま）
+  const rankValue = (p) => {
+    const n = parseInt(p.rank);
+    return isNaN(n) ? Infinity : n;
+  };
+  const sortedPlayers = [...players].sort((a, b) => {
+    const ra = rankValue(a), rb = rankValue(b);
+    return ra === rb ? 0 : ra - rb;
+  });
+
+  sortedPlayers.forEach((p, i) => {
     const today = calcToday(p);
     const total = calcTotal(p);
     const row = document.createElement('div');
