@@ -884,7 +884,8 @@ function showScoreboard() {
     const n = parseInt(p.rank);
     return isNaN(n) ? Infinity : n;
   };
-  const sortedPlayers = [...players].sort((a, b) => {
+  // 名前が空欄の選手は表示しない（4人打ち対応）
+  const sortedPlayers = players.filter((p) => (p.name || '').trim() !== '').sort((a, b) => {
     const ra = rankValue(a), rb = rankValue(b);
     return ra === rb ? 0 : ra - rb;
   });
