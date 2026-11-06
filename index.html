@@ -415,7 +415,26 @@ body {
 .btn-back:hover { background: #84193c; }
 
 input[type="file"] { display: none; }
+
+.btn-export {
+  position: fixed;
+  bottom: 20px;
+  right: 165px;
+  padding: 10px 20px;
+  background: #fff;
+  border: 1px solid #6b1430;
+  border-radius: 8px;
+  color: #6b1430;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 100;
+}
+.btn-export:hover { background: #ffeef3; }
+.btn-export:disabled { opacity: 0.6; cursor: wait; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
 </head>
 <body>
 
@@ -507,7 +526,8 @@ input[type="file"] { display: none; }
     <div class="sb-rows" id="sb-rows"></div>
   </div>
 
-  <button class="btn-back" onclick="showEditor()">← 編集に戻る</button>
+  <button class="btn-export no-export" id="btn-export" onclick="exportPng()">PNGで保存</button>
+  <button class="btn-back no-export" onclick="showEditor()">← 編集に戻る</button>
 </div>
 
 <script>
@@ -899,6 +919,76 @@ function showScoreboard() {
 function showEditor() {
   document.getElementById('editor').style.display = 'block';
   document.getElementById('scoreboard').style.display = 'none';
+}
+
+// スコアボードで使う文字だけのフォントを取得して、書き出し画像に埋め込む
+async function buildFontEmbedCss(text) {
+  const chars = [...new Set(text.replace(/\s/g, ''))].join('');
+  const url = 'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900'
+    + '&family=Noto+Serif+JP:wght@700&text=' + encodeURIComponent(chars);
+  let css = await (await fetch(url)).text();
+  const fontUrls = [...new Set([...css.matchAll(/url\((https:[^)]+)\)/g)].map(m => m[1]))];
+  for (const fontUrl of fontUrls) {
+    const blob = await (await fetch(fontUrl)).blob();
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    css = css.split(fontUrl).join(dataUrl);
+  }
+  return css;
+}
+
+async function renderBoardPng() {
+  const board = document.getElementById('scoreboard');
+  await document.fonts.ready;
+  const options = {
+    width: 1280,
+    height: 720,
+    pixelRatio: 1,
+    filter: (node) => {
+      if (node.classList && node.classList.contains('no-export')) return false;
+      // ロゴ未設定時の非表示imgは src が空で、含めると書き出しに失敗する
+      return !(node.tagName === 'IMG' && node.style.display === 'none');
+    },
+  };
+  try {
+    options.fontEmbedCSS = await buildFontEmbedCss(board.textContent);
+  } catch (err) {
+    // フォントを取得できなくても、端末のフォントで書き出しは続ける
+    console.warn('フォントの埋め込みに失敗しました', err);
+    options.skipFonts = true;
+  }
+  return htmlToImage.toPng(board, options);
+}
+
+function exportFileName() {
+  const now = new Date();
+  const date = now.getFullYear()
+    + String(now.getMonth() + 1).padStart(2, '0')
+    + String(now.getDate()).padStart(2, '0');
+  const parts = [document.getElementById('meta-title').value, document.getElementById('meta-league').value, date];
+  return parts.join('_').replace(/[\\/:*?"<>|\s]+/g, '_') + '.png';
+}
+
+async function exportPng() {
+  const btn = document.getElementById('btn-export');
+  btn.disabled = true;
+  btn.textContent = '書き出し中…';
+  try {
+    const link = document.createElement('a');
+    link.href = await renderBoardPng();
+    link.download = exportFileName();
+    link.click();
+  } catch (err) {
+    console.error(err);
+    alert('PNGの書き出しに失敗しました。ページを再読み込みしてもう一度お試しください。');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'PNGで保存';
+  }
 }
 
 buildEditor();
